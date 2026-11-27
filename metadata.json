@@ -1,0 +1,6 @@
+{
+  "name": "VALIANA GOLD - Bisutería Artesanal",
+  "description": "Catálogo exclusivo de bisutería artesanal en hilos trenzados y oro laminado. Ventas al por mayor y detal con pedidos por WhatsApp en Colombia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Catalog product item for VALIANA GOLD storefront (retail and wholesale)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique product identifier",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the jewelry piece",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "price": {
+          "type": "number",
+          "description": "Retail unit price in COP"
+        },
+        "oldPrice": {
+          "type": "number",
+          "description": "Optional previous/strikethrough retail price in COP"
+        },
+        "wholesalePrice6": {
+          "type": "number",
+          "description": "Optional unit price for wholesale pack of 6 in COP"
+        },
+        "wholesalePrice12": {
+          "type": "number",
+          "description": "Optional unit price for wholesale pack of 12 in COP"
+        },
+        "image": {
+          "type": "string",
+          "description": "Primary product image HTTPS URL or compressed JPEG data URL",
+          "minLength": 1,
+          "maxLength": 220000
+        },
+        "images": {
+          "type": "array",
+          "description": "Optional list of up to 3 additional product photos (max 4 photos total including primary image)"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Manillas", "Collares", "Aretes", "Anillos", "Sets", "Tobilleras"]
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["Dama", "Caballero", "Niña", "Niño", "Unisex"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["detal", "mayor", "ambos"]
+        },
+        "material": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "stock": {
+          "type": "number",
+          "description": "Available inventory units"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "promoBadge": {
+          "type": "string",
+          "enum": ["ninguno", "mas_vendido", "nuevo", "edicion_limitada"]
+        },
+        "promoUntil": {
+          "type": "string",
+          "maxLength": 20,
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": ["id", "name", "price", "image", "category", "gender", "type", "stock", "createdAt", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized store administrator record",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "AuthorizedAdmin": {
+      "title": "AuthorizedAdmin",
+      "description": "Store administrator authorized by normalized email key",
+      "type": "object",
+      "properties": {
+        "emailKey": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        },
+        "addedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["emailKey", "email", "role", "createdAt"]
+    },
+    "AdminPinConfig": {
+      "title": "AdminPinConfig",
+      "description": "Salted SHA-256 hash configuration for secondary administrator PIN lock",
+      "type": "object",
+      "properties": {
+        "salt": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]+$"
+        },
+        "pinHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["salt", "pinHash", "updatedBy", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Publicly readable product catalog managed exclusively by verified store administrators"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Administrator allowlist documents managed by the bootstrap store owner"
+    },
+    "/authorizedAdmins/{emailKey}": {
+      "schema": { "$ref": "#/entities/AuthorizedAdmin" },
+      "description": "Email-keyed administrator allowlist so the store owner can grant access to a client email"
+    },
+    "/adminSecurity/{docId}": {
+      "schema": { "$ref": "#/entities/AdminPinConfig" },
+      "description": "Salted PIN hash protecting admin panel access after Google authentication"
+    }
+  }
+}

@@ -1,0 +1,202 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function emailToKey(email) {
+      return email.lower().replace('[^a-z0-9]', '_');
+    }
+
+    function isBootstrapAdmin() {
+      return isVerified() && request.auth.token.email == 'jairoramospa68@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() || (
+        isVerified() && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          (
+            request.auth.token.email is string &&
+            exists(/databases/$(database)/documents/authorizedAdmins/$(emailToKey(request.auth.token.email)))
+          )
+        )
+      );
+    }
+
+    // --- Validation Blueprints ---
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'price', 'image', 'category', 'gender', 'type', 'stock', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'price', 'oldPrice', 'wholesalePrice6', 'wholesalePrice12',
+          'image', 'images', 'category', 'gender', 'type', 'material', 'color', 'stock',
+          'description', 'promoBadge', 'promoUntil', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        data.price is number && data.price >= 0 && data.price <= 100000000 &&
+        (!('oldPrice' in data) || data.oldPrice == null || (data.oldPrice is number && data.oldPrice >= 0 && data.oldPrice <= 100000000)) &&
+        (!('wholesalePrice6' in data) || data.wholesalePrice6 == null || (data.wholesalePrice6 is number && data.wholesalePrice6 >= 0 && data.wholesalePrice6 <= 100000000)) &&
+        (!('wholesalePrice12' in data) || data.wholesalePrice12 == null || (data.wholesalePrice12 is number && data.wholesalePrice12 >= 0 && data.wholesalePrice12 <= 100000000)) &&
+        data.image is string && data.image.size() >= 1 && data.image.size() <= 220000 &&
+        (!('images' in data) || (
+          data.images is list &&
+          data.images.size() <= 3 &&
+          (data.images.size() < 1 || (data.images[0] is string && data.images[0].size() >= 1 && data.images[0].size() <= 200000)) &&
+          (data.images.size() < 2 || (data.images[1] is string && data.images[1].size() >= 1 && data.images[1].size() <= 200000)) &&
+          (data.images.size() < 3 || (data.images[2] is string && data.images[2].size() >= 1 && data.images[2].size() <= 200000))
+        )) &&
+        data.category in ['Manillas', 'Collares', 'Aretes', 'Anillos', 'Sets', 'Tobilleras'] &&
+        data.gender in ['Dama', 'Caballero', 'Niña', 'Niño', 'Unisex'] &&
+        data.type in ['detal', 'mayor', 'ambos'] &&
+        (!('material' in data) || (data.material is string && data.material.size() <= 300)) &&
+        (!('color' in data) || (data.color is string && data.color.size() <= 160)) &&
+        data.stock is number && data.stock >= 0 && data.stock <= 1000000 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+        (!('promoBadge' in data) || data.promoBadge in ['ninguno', 'mas_vendido', 'nuevo', 'edicion_limitada']) &&
+        (!('promoUntil' in data) || (data.promoUntil is string && data.promoUntil.size() <= 20 && data.promoUntil.matches('^(\\d{4}-\\d{2}-\\d{2})?$'))) &&
+        (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 128)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'role', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.role == 'admin' &&
+        data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /products/{productId} {
+      // Public catalog storefront: anyone can browse products (contains no PII)
+      allow get: if isValidId(productId);
+      allow list: if true;
+
+      // Only verified administrators can create, update, or delete products
+      allow create: if isValidId(productId) &&
+        isAdmin() &&
+        isValidProduct(incoming()) &&
+        incoming().id == productId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (!('updatedBy' in incoming()) || incoming().updatedBy == request.auth.uid);
+
+      allow update: if isValidId(productId) &&
+        isAdmin() &&
+        isValidProduct(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (!('updatedBy' in incoming()) || incoming().updatedBy == request.auth.uid) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'price', 'oldPrice', 'wholesalePrice6', 'wholesalePrice12',
+          'image', 'images', 'category', 'gender', 'type', 'material', 'color', 'stock',
+          'description', 'promoBadge', 'promoUntil', 'updatedAt', 'updatedBy'
+        ]);
+
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    function isValidAuthorizedAdmin(data) {
+      return data.keys().hasAll(['emailKey', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['emailKey', 'email', 'role', 'addedBy', 'createdAt']) &&
+        isValidId(data.emailKey) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.role == 'admin' &&
+        (!('addedBy' in data) || (data.addedBy is string && data.addedBy.size() <= 128)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAdminPinConfig(data) {
+      return data.keys().hasAll(['salt', 'pinHash', 'updatedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['salt', 'pinHash', 'updatedBy', 'createdAt', 'updatedAt']) &&
+        data.salt is string && data.salt.size() >= 16 && data.salt.size() <= 64 && data.salt.matches('^[a-f0-9]+$') &&
+        data.pinHash is string && data.pinHash.size() == 64 && data.pinHash.matches('^[a-f0-9]{64}$') &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isBootstrapAdmin() || (isVerified() && request.auth.uid == adminId));
+      allow list: if isBootstrapAdmin();
+      allow create: if isValidId(adminId) &&
+        isBootstrapAdmin() &&
+        isValidAdminUser(incoming()) &&
+        incoming().uid == adminId &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(adminId) && isBootstrapAdmin();
+    }
+
+    match /authorizedAdmins/{emailKey} {
+      allow get: if isValidId(emailKey) && (
+        isBootstrapAdmin() ||
+        (isVerified() && request.auth.token.email is string && emailToKey(request.auth.token.email) == emailKey)
+      );
+      allow list: if isBootstrapAdmin();
+      allow create: if isValidId(emailKey) &&
+        isBootstrapAdmin() &&
+        isValidAuthorizedAdmin(incoming()) &&
+        incoming().emailKey == emailKey &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(emailKey) && isBootstrapAdmin();
+    }
+
+    match /adminSecurity/{docId} {
+      allow get: if isValidId(docId) && docId == 'pin' && isAdmin();
+      allow list: if false;
+      allow create: if isValidId(docId) &&
+        docId == 'pin' &&
+        isAdmin() &&
+        isValidAdminPinConfig(incoming()) &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(docId) &&
+        docId == 'pin' &&
+        isAdmin() &&
+        isValidAdminPinConfig(incoming()) &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['salt', 'pinHash', 'updatedAt', 'updatedBy']);
+      allow delete: if isValidId(docId) && docId == 'pin' && isBootstrapAdmin();
+    }
+
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+      allow list, write: if false;
+    }
+  }
+}
