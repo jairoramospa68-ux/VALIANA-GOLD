@@ -1,13 +1,15 @@
 import { CartItem, Product, SaleType, WholesaleTier } from '../types';
 
 export const WHATSAPP_PHONE = '573107596760';
+export const PUBLIC_STORE_URL = 'https://valiana-gold.netlify.app';
 
 export function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(amount);
+  const safe = Number.isFinite(amount) ? Math.round(amount) : 0;
+  const sign = safe < 0 ? '-' : '';
+  const formatted = Math.abs(safe)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${sign}$${formatted}`;
 }
 
 export function getSaleTypeLabel(type: SaleType): string {
@@ -79,7 +81,10 @@ export function getActivePromoBadge(product: Product): { label: string; color: s
 }
 
 export function buildProductShareData(product: Product) {
-  const url = `${window.location.origin}${window.location.pathname}#producto=${product.id}`;
+  const baseUrl = window.location.hostname.includes('netlify.app')
+    ? `${window.location.origin}${window.location.pathname}`
+    : `${PUBLIC_STORE_URL}/`;
+  const url = `${baseUrl}#producto=${product.id}`;
   const price6 = getWholesalePrice6(product);
   const price12 = getWholesalePrice12(product);
 

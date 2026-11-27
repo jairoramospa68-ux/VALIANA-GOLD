@@ -16,11 +16,10 @@ interface CategoryFilterProps {
 const CATEGORIES: { label: Category; icon: string }[] = [
   { label: 'Todos', icon: '✦' },
   { label: 'Manillas', icon: '⚪' },
-  { label: 'Collares', icon: '📿' },
-  { label: 'Aretes', icon: '✨' },
+  { label: 'Pulseras', icon: '💫' },
   { label: 'Anillos', icon: '💍' },
-  { label: 'Sets', icon: '👑' },
-  { label: 'Tobilleras', icon: '🌊' },
+  { label: 'Aretes', icon: '✨' },
+  { label: 'Collares', icon: '📿' },
 ];
 
 const GENDERS: { label: string; value: string }[] = [
@@ -48,15 +47,15 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 }) => {
   return (
     <div className="space-y-2.5">
-      {/* Category Horizontal Scroll */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* Category Grid / Wrap for all items to fit on screen */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         {CATEGORIES.map((cat) => {
           const isActive = currentCategory === cat.label;
           return (
             <button
               key={cat.label}
               onClick={() => onSelectCategory(cat.label)}
-              className={`flex-shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
                 isActive
                   ? 'bg-[#D4AF37] text-black shadow-xs font-semibold'
                   : 'bg-[#FAF8F5] border border-[#E5DFD5] text-gray-700 hover:border-[#D4AF37]'

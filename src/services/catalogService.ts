@@ -31,7 +31,7 @@ export interface AdminPinRecord {
   pinHash: string;
 }
 
-const VALID_CATEGORIES = new Set(['Manillas', 'Collares', 'Aretes', 'Anillos', 'Sets', 'Tobilleras']);
+const VALID_CATEGORIES = new Set(['Manillas', 'Pulseras', 'Anillos', 'Aretes', 'Collares']);
 const VALID_GENDERS = new Set(['Dama', 'Caballero', 'Niña', 'Niño', 'Unisex']);
 const VALID_TYPES = new Set(['detal', 'mayor', 'ambos']);
 const VALID_PROMOS = new Set(['ninguno', 'mas_vendido', 'nuevo', 'edicion_limitada']);

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   User,
 } from 'firebase/auth';
@@ -34,6 +36,7 @@ import { AdminModal } from './components/AdminModal';
 import { Footer } from './components/Footer';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWAInstallBanner } from './components/PWAInstallButton';
 import { Search, Sparkles } from 'lucide-react';
 
 const STORAGE_KEY_PRODUCTS = 'valiana_products_catalog_v2';
@@ -64,6 +67,7 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<{ code?: string; message: string } | null>(null);
   const [authorizedAdmins, setAuthorizedAdmins] = useState<AuthorizedAdminRecord[]>([]);
   const [adminPinRecord, setAdminPinRecord] = useState<AdminPinRecord | null | undefined>(undefined);
   const [pinUnlocked, setPinUnlocked] = useState(false);
@@ -117,13 +121,49 @@ export default function App() {
     }, 3400);
   };
 
-  // Subscribe to Firebase Auth changes
+  // Subscribe to Firebase Auth changes & handle mobile Google redirect result
   useEffect(() => {
+    const pendingRedirect = sessionStorage.getItem('valiana_pending_admin_redirect') === '1';
+    if (pendingRedirect) {
+      sessionStorage.removeItem('valiana_pending_admin_redirect');
+      setIsAdminOpen(true);
+    }
+
+    getRedirectResult(auth)
+      .then(async (cred) => {
+        if (cred?.user) {
+          setIsAdminOpen(true);
+          const adminOk = await checkIsAdminUser(cred.user);
+          if (adminOk) {
+            setAuthError(null);
+            showToast('Sesión iniciada. Nube sincronizada en tiempo real.');
+          } else {
+            showToast('Esta cuenta aún no está autorizada para administrar la tienda.');
+          }
+        }
+      })
+      .catch((err) => {
+        const code = (err as { code?: string })?.code;
+        setIsAdminOpen(true);
+        if (code === 'auth/unauthorized-domain') {
+          setAuthError({
+            code,
+            message: `El dominio "${window.location.hostname}" aún no está autorizado en Firebase para iniciar sesión con Google.`,
+          });
+        } else if (code) {
+          setAuthError({
+            code,
+            message: 'No se pudo completar el ingreso con Google en este navegador. Intenta abrir la página en Chrome o Safari.',
+          });
+        }
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthUser(user);
       if (user) {
         const adminOk = await checkIsAdminUser(user);
         setIsAdmin(adminOk);
+        setAuthError(null);
       } else {
         setIsAdmin(false);
       }
@@ -360,26 +400,99 @@ export default function App() {
     showToast('Abriendo WhatsApp para compartir este diseño...');
   };
 
-  // Google Sign-In / Sign-Out for Admin
+  const formatGoogleAuthError = (code?: string): { code?: string; message: string } => {
+    if (code === 'auth/unauthorized-domain') {
+      return {
+        code,
+        message: `El dominio "${window.location.hostname}" aún no está autorizado en Firebase. Agrégalo en Authorized domains.`,
+      };
+    }
+    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+      return {
+        code,
+        message: 'El navegador del celular bloqueó la ventana de Google. Usa el botón "Ingresar directo (Celular)" de abajo.',
+      };
+    }
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      return {
+        code,
+        message: 'Se cerró la ventana antes de terminar. Si estás en celular, toca "Ingresar directo (Celular)".',
+      };
+    }
+    if (code === 'auth/network-request-failed') {
+      return {
+        code,
+        message: 'Error de conexión a internet. Verifica tus datos o Wi-Fi e intenta nuevamente.',
+      };
+    }
+    return {
+      code,
+      message: 'No se pudo iniciar sesión con Google. Si abriste el enlace desde WhatsApp, ábrelo primero en Chrome o Safari.',
+    };
+  };
+
+  // Google Sign-In / Sign-Out for Admin (with mobile/PWA redirect fallback)
   const handleSignInGoogle = async () => {
+    setAuthError(null);
+    const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+    const isStandalonePWA =
+      typeof window !== 'undefined' &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+        Boolean((window.navigator as { standalone?: boolean }).standalone));
+
+    if (!isInIframe && isStandalonePWA) {
+      sessionStorage.setItem('valiana_pending_admin_redirect', '1');
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+
     try {
       const cred = await signInWithPopup(auth, googleProvider);
       const adminOk = await checkIsAdminUser(cred.user);
       if (adminOk) {
+        setAuthError(null);
         showToast('Sesión iniciada. Nube sincronizada en tiempo real.');
       } else {
-        showToast('Esta cuenta no tiene permisos de administrador.');
+        showToast('Esta cuenta aún no tiene permisos de administrador.');
       }
     } catch (err) {
       const code = (err as { code?: string })?.code;
-      if (code !== 'auth/popup-closed-by-user') {
-        showToast('No se pudo iniciar sesión con Google. Intenta nuevamente.');
+      if (
+        !isInIframe &&
+        (code === 'auth/popup-blocked' ||
+          code === 'auth/operation-not-supported-in-this-environment')
+      ) {
+        sessionStorage.setItem('valiana_pending_admin_redirect', '1');
+        await signInWithRedirect(auth, googleProvider);
+        return;
       }
+      const formatted = formatGoogleAuthError(code);
+      setAuthError(formatted);
+      showToast(formatted.message);
+    }
+  };
+
+  const handleSignInGoogleRedirect = async () => {
+    setAuthError(null);
+    const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+    if (isInIframe) {
+      await handleSignInGoogle();
+      return;
+    }
+    try {
+      sessionStorage.setItem('valiana_pending_admin_redirect', '1');
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const formatted = formatGoogleAuthError(code);
+      setAuthError(formatted);
+      showToast(formatted.message);
     }
   };
 
   const handleSignOutGoogle = async () => {
     setPinUnlocked(false);
+    setAuthError(null);
     await signOut(auth);
     showToast('Sesión de administrador cerrada');
   };
@@ -523,7 +636,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#141414] text-[#F4E8C1] border border-[#D4AF37] px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm font-medium flex items-center gap-2 animate-in slide-in-from-top duration-300">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[70] bg-[#141414] text-[#F4E8C1] border border-[#D4AF37] px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm font-medium flex items-center gap-2 animate-in slide-in-from-top duration-300">
           <Sparkles className="w-4 h-4 text-[#D4AF37]" />
           <span>{toastMessage}</span>
         </div>
@@ -540,6 +653,9 @@ export default function App() {
         storeMode={storeMode}
         onToggleStoreMode={setStoreMode}
       />
+
+      {/* Mobile Home-Screen Install Banner + #instalar handler */}
+      <PWAInstallBanner />
 
       {/* Search Bar Drawer if opened */}
       {searchOpen && (
@@ -580,8 +696,8 @@ export default function App() {
             Descubre tu encanto
           </h2>
           <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent mx-auto mb-2" />
-          <p className="max-w-xl mx-auto text-sm sm:text-base md:text-lg text-gray-700 font-medium leading-snug">
-            Pulseras, anillos y detalles que expresan tu esencia.
+          <p className="max-w-xl mx-auto text-sm sm:text-base md:text-lg text-gray-700 font-medium leading-snug text-center">
+            Detalles que expresan tu esencia.
           </p>
         </div>
 
@@ -711,6 +827,8 @@ export default function App() {
         isAdmin={isAdmin}
         isBootstrapAdmin={isBootstrapAdmin}
         authLoading={authLoading}
+        authError={authError}
+        onClearAuthError={() => setAuthError(null)}
         isCloudSynced={isCloudSynced}
         authorizedAdmins={authorizedAdmins}
         pinLoading={isAdmin && adminPinRecord === undefined}
@@ -721,6 +839,7 @@ export default function App() {
         onResetPin={handleResetAdminPin}
         onLockPin={handleLockAdminPin}
         onSignInGoogle={handleSignInGoogle}
+        onSignInGoogleRedirect={handleSignInGoogleRedirect}
         onSignOutGoogle={handleSignOutGoogle}
         onAuthorizeAdminEmail={handleAuthorizeAdminEmail}
         onRevokeAdminEmail={handleRevokeAdminEmail}

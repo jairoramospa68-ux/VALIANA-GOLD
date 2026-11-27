@@ -1,4 +1,4 @@
-export type Category = 'Todos' | 'Manillas' | 'Collares' | 'Aretes' | 'Anillos' | 'Sets' | 'Tobilleras';
+export type Category = 'Todos' | 'Manillas' | 'Pulseras' | 'Anillos' | 'Aretes' | 'Collares';
 
 export type Gender = 'Dama' | 'Caballero' | 'Niña' | 'Niño' | 'Unisex';
 
@@ -17,7 +17,7 @@ export interface Product {
   wholesalePrice12?: number | null; // Precio unitario llevando 12 unidades (docena)
   image: string;
   images?: string[]; // Hasta 3 fotos adicionales opcionales (máx. 4 en total)
-  category: 'Manillas' | 'Collares' | 'Aretes' | 'Anillos' | 'Sets' | 'Tobilleras';
+  category: 'Manillas' | 'Pulseras' | 'Anillos' | 'Aretes' | 'Collares';
   gender: Gender;
   type: SaleType;
   material?: string;

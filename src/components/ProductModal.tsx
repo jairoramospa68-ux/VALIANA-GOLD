@@ -249,9 +249,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#EAE3D2] mb-4">
               <div className="flex items-baseline justify-between mb-1">
                 <span className="text-xs text-gray-500 font-medium">Precio unitario:</span>
-                <span className="text-xl font-bold text-gray-900">
-                  {formatPrice(currentUnitPrice)} <span className="text-xs text-gray-500 font-normal">c/u</span>
-                </span>
+                <div className="flex items-baseline gap-2">
+                  {selectedTier === 'detal' && product.oldPrice && product.oldPrice > product.price && (
+                    <span className="text-sm font-medium text-gray-500 line-through decoration-black decoration-1">
+                      {formatPrice(product.oldPrice)}
+                    </span>
+                  )}
+                  <span className="text-xl font-bold text-gray-900">
+                    {formatPrice(currentUnitPrice)} <span className="text-xs text-gray-500 font-normal">c/u</span>
+                  </span>
+                </div>
               </div>
 
               {selectedTier !== 'detal' && (

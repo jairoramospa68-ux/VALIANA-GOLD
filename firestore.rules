@@ -72,7 +72,7 @@ service cloud.firestore {
           (data.images.size() < 2 || (data.images[1] is string && data.images[1].size() >= 1 && data.images[1].size() <= 200000)) &&
           (data.images.size() < 3 || (data.images[2] is string && data.images[2].size() >= 1 && data.images[2].size() <= 200000))
         )) &&
-        data.category in ['Manillas', 'Collares', 'Aretes', 'Anillos', 'Sets', 'Tobilleras'] &&
+        data.category in ['Manillas', 'Pulseras', 'Anillos', 'Aretes', 'Collares'] &&
         data.gender in ['Dama', 'Caballero', 'Niña', 'Niño', 'Unisex'] &&
         data.type in ['detal', 'mayor', 'ambos'] &&
         (!('material' in data) || (data.material is string && data.material.size() <= 300)) &&

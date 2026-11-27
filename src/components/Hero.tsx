@@ -53,6 +53,13 @@ export const Hero: React.FC<HeroProps> = ({ onExploreClick }) => {
           </div>
         </div>
 
+        {/* B2B / Boutique Special Pricing Notice */}
+        <div className="mb-3 max-w-lg mx-auto">
+          <p className="text-xs sm:text-sm font-semibold text-[#F4E8C1] tracking-wide leading-relaxed bg-white/5 border border-[#D4AF37]/30 py-2 px-3 rounded-lg shadow-xs">
+            ✨ Precios especiales para almacenes, boutiques y tiendas de accesorios
+          </p>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-row items-center justify-center gap-2.5 max-w-sm mx-auto">
           <button

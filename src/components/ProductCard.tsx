@@ -47,8 +47,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </span>
         )}
         {storeMode === 'detal' && product.oldPrice && product.oldPrice > product.price && (
-          <span className="bg-[#D4AF37] text-black font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded shadow-sm">
-            Oferta
+          <span className="bg-[#D4AF37] text-black font-bold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded shadow-sm">
+            {(() => {
+              const pct = Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
+              return pct >= 1 ? `Oferta -${pct}%` : 'Oferta';
+            })()}
           </span>
         )}
       </div>
@@ -191,15 +194,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           ) : (
             /* RETAIL PRICING VIEW */
             <div className="mb-1.5">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-sm sm:text-base md:text-lg font-bold text-[#1F1F1F]">
-                  {formatPrice(product.price)}
-                </span>
+              <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
                 {product.oldPrice && product.oldPrice > product.price && (
-                  <span className="text-[11px] text-gray-400 line-through">
+                  <span className="text-xs sm:text-sm font-medium text-gray-500 line-through decoration-black decoration-1">
                     {formatPrice(product.oldPrice)}
                   </span>
                 )}
+                <span className="text-sm sm:text-base md:text-lg font-bold text-[#1F1F1F]">
+                  {formatPrice(product.price)}
+                </span>
               </div>
               <div className="text-[9px] sm:text-[10px] text-[#A68A36] font-medium mt-0.5">
                 Mayorista: {formatPrice(price6)} c/u (x6)

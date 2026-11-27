@@ -12,6 +12,7 @@ import {
   getWholesalePrice6,
   getWholesalePrice12,
   getProductGallery,
+  PUBLIC_STORE_URL,
 } from '../utils/formatters';
 import {
   X,
@@ -39,6 +40,9 @@ import {
   KeyRound,
   UserPlus,
   UserCheck,
+  Copy,
+  Share2,
+  Smartphone,
 } from 'lucide-react';
 import { AuthorizedAdminRecord } from '../services/catalogService';
 
@@ -50,6 +54,8 @@ interface AdminModalProps {
   isAdmin: boolean;
   isBootstrapAdmin: boolean;
   authLoading: boolean;
+  authError: { code?: string; message: string } | null;
+  onClearAuthError: () => void;
   isCloudSynced: boolean;
   authorizedAdmins: AuthorizedAdminRecord[];
   pinLoading: boolean;
@@ -60,6 +66,7 @@ interface AdminModalProps {
   onResetPin: () => Promise<void>;
   onLockPin: () => void;
   onSignInGoogle: () => Promise<void>;
+  onSignInGoogleRedirect: () => Promise<void>;
   onSignOutGoogle: () => Promise<void>;
   onAuthorizeAdminEmail: (email: string) => Promise<void>;
   onRevokeAdminEmail: (emailKey: string) => Promise<void>;
@@ -79,6 +86,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   isAdmin,
   isBootstrapAdmin,
   authLoading,
+  authError,
+  onClearAuthError,
   isCloudSynced,
   authorizedAdmins,
   pinLoading,
@@ -89,6 +98,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onResetPin,
   onLockPin,
   onSignInGoogle,
+  onSignInGoogleRedirect,
   onSignOutGoogle,
   onAuthorizeAdminEmail,
   onRevokeAdminEmail,
@@ -145,9 +155,20 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   if (!isOpen) return null;
 
   const handleGoogleLogin = async () => {
+    onClearAuthError();
     setIsAuthActionLoading(true);
     try {
       await onSignInGoogle();
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handleGoogleRedirectLogin = async () => {
+    onClearAuthError();
+    setIsAuthActionLoading(true);
+    try {
+      await onSignInGoogleRedirect();
     } finally {
       setIsAuthActionLoading(false);
     }
@@ -547,9 +568,44 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
             {authUser && !isAdmin ? (
               <div className="space-y-4 mt-3">
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 leading-relaxed">
-                  La cuenta <strong>{authUser.email}</strong> no está autorizada para administrar esta tienda. Solo el propietario o los correos Gmail autorizados dentro del panel pueden ingresar.
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 leading-relaxed text-left space-y-2">
+                  <p>
+                    La cuenta <strong>{authUser.email}</strong> aún no está autorizada para administrar esta tienda.
+                  </p>
+                  <p className="text-[11px] text-rose-700">
+                    No necesitas usar el correo del creador. Pídele que agregue tu correo <strong>{authUser.email}</strong> en la sección <em>Correos Gmail Autorizados</em> del panel (solo se hace una vez).
+                  </p>
                 </div>
+                {authUser.email && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(authUser.email || '');
+                          onShowToast('Correo copiado para enviar al administrador.');
+                        } catch {
+                          onShowToast('No se pudo copiar el correo.');
+                        }
+                      }}
+                      className="flex-1 py-2.5 px-3 rounded-lg border border-[#D4AF37] bg-[#FAF8F5] hover:bg-[#D4AF37]/15 text-gray-900 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-[#B8941F]" />
+                      <span>Copiar este correo</span>
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `Hola, por favor autoriza mi correo Gmail para administrar la tienda VALIANA GOLD: ${authUser.email}`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Pedir permiso por WhatsApp</span>
+                    </a>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={onSignOutGoogle}
@@ -560,10 +616,46 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="space-y-4 mt-2">
+              <div className="space-y-3.5 mt-2">
                 <p className="text-xs text-gray-500 leading-relaxed">
                   Inicia sesión con tu cuenta autorizada de Google para publicar y actualizar productos al instante en todos los celulares.
                 </p>
+
+                {authError && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-left text-xs text-amber-950 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="leading-relaxed">{authError.message}</p>
+                    </div>
+                    {authError.code === 'auth/unauthorized-domain' && typeof window !== 'undefined' && (
+                      <div className="pt-1 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(window.location.hostname);
+                              onShowToast(`Dominio "${window.location.hostname}" copiado.`);
+                            } catch {
+                              onShowToast('Copia manualmente el dominio.');
+                            }
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-semibold text-[11px] inline-flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar dominio ({window.location.hostname})</span>
+                        </button>
+                        <a
+                          href="https://console.firebase.google.com/project/xanthic-nexus-lt8c4/authentication/settings"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-[#161616] text-white font-semibold text-[11px] hover:bg-black"
+                        >
+                          Abrir Firebase Authorized Domains
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -575,9 +667,26 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <span>{isAuthActionLoading ? 'Conectando...' : 'Ingresar con Google'}</span>
                 </button>
 
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  Acceso restringido: cualquier otro correo Gmail externo es bloqueado automáticamente.
-                </p>
+                {typeof window !== 'undefined' && window.self === window.top && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleRedirectLogin}
+                    disabled={isAuthActionLoading}
+                    className="w-full py-2.5 px-4 rounded-xl border border-[#D4AF37]/60 bg-[#FAF8F5] hover:bg-[#D4AF37]/15 text-gray-900 font-semibold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-[#B8941F]" />
+                    <span>¿En celular no abre? Ingresar directo (sin ventana)</span>
+                  </button>
+                )}
+
+                <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-[11px] text-gray-500 leading-relaxed text-left space-y-1">
+                  <p>
+                    <strong>En celular:</strong> si abriste el enlace desde WhatsApp, toca <strong>⋮</strong> (o la brújula en iPhone) y elige <strong>Abrir en Chrome / Safari</strong>.
+                  </p>
+                  <p>
+                    Acceso restringido: cualquier correo Gmail que no haya sido autorizado es bloqueado automáticamente.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -772,6 +881,93 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Salir</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Customer Installable App Link Strip */}
+            <div className="p-3.5 sm:p-4 rounded-xl bg-[#161616] text-white border border-[#D4AF37]/40 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#D4AF37]/15 border border-[#D4AF37]/40 flex items-center justify-center flex-shrink-0">
+                    <Smartphone className="w-4 h-4 text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-[#F3E3B3] uppercase tracking-wider">
+                      Enlace de Acceso Directo para Clientes (App Instalable)
+                    </p>
+                    <p className="text-[11px] text-gray-300 mt-0.5">
+                      Envía el enlace directo de instalación para que tus clientes guarden el ícono de VALIANA GOLD en su celular.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div className="px-2.5 py-2 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block text-[10px] uppercase tracking-wider text-[#D4AF37] font-semibold">
+                      Link directo para instalar
+                    </span>
+                    <span className="block truncate text-gray-200 font-mono">
+                      {PUBLIC_STORE_URL}/#instalar
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(`${PUBLIC_STORE_URL}/#instalar`);
+                        onShowToast('Enlace directo de instalación copiado.');
+                      } catch {
+                        onShowToast('No se pudo copiar. Copia manualmente el enlace.');
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#B8941F] text-[#161616] font-bold flex items-center gap-1 flex-shrink-0 transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copiar</span>
+                  </button>
+                </div>
+
+                <div className="px-2.5 py-2 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+                      Link tienda normal
+                    </span>
+                    <span className="block truncate text-gray-200 font-mono">
+                      {PUBLIC_STORE_URL}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(PUBLIC_STORE_URL);
+                        onShowToast('Enlace de la tienda copiado.');
+                      } catch {
+                        onShowToast('No se pudo copiar. Copia manualmente el enlace.');
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold flex items-center gap-1 flex-shrink-0 transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    `✨ ¡Guarda nuestra tienda VALIANA GOLD en la pantalla principal de tu celular! Abre este enlace y toca en "Instalar":\n${PUBLIC_STORE_URL}/#instalar`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Enviar invitación por WhatsApp</span>
+                </a>
               </div>
             </div>
 
@@ -1030,7 +1226,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Precio de venta al Detal (COP) *
+                      Nuevo precio de venta al Detal ($) *
                     </label>
                     <input
                       type="number"
@@ -1041,20 +1237,30 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       className="w-full p-2.5 rounded-lg border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#D4AF37]"
                       required
                     />
+                    {price && Number(price) > 0 && (
+                      <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block">
+                        Se verá en tienda: {formatPrice(Number(price))}
+                      </span>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Precio anterior / tachado (Opcional)
+                      Precio original tachado · Black Friday / Oferta ($ · Opcional)
                     </label>
                     <input
                       type="number"
                       value={oldPrice}
                       onChange={(e) => setOldPrice(e.target.value)}
-                      placeholder="Ej: 35000"
+                      placeholder="Ej: 35000 (aparece tachado a la izquierda)"
                       min="0"
                       className="w-full p-2.5 rounded-lg border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
+                    <span className="text-[10px] text-gray-500 mt-0.5 block">
+                      {oldPrice && Number(oldPrice) > 0
+                        ? `Se verá tachado: ${formatPrice(Number(oldPrice))}`
+                        : 'Si es mayor al precio de venta, saldrá con línea negra encima y el nuevo precio a su derecha.'}
+                    </span>
                   </div>
                 </div>
 
@@ -1063,7 +1269,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <div>
                     <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1">
                       <Package className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Precio Mayorista x6 uds (COP c/u)</span>
+                      <span>Precio Mayorista x6 uds ($ c/u)</span>
                     </label>
                     <input
                       type="number"
@@ -1074,14 +1280,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       className="w-full p-2.5 rounded-lg border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
                     <span className="text-[10px] text-gray-500 mt-0.5 block">
-                      Vacío para calcular automático (~25% dto).
+                      {wholesalePrice6 && Number(wholesalePrice6) > 0
+                        ? `Se verá: ${formatPrice(Number(wholesalePrice6))} c/u`
+                        : 'Vacío para calcular automático (~25% dto).'}
                     </span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center gap-1">
                       <Crown className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Precio Mayorista x12 / Docena (COP c/u)</span>
+                      <span>Precio Mayorista x12 / Docena ($ c/u)</span>
                     </label>
                     <input
                       type="number"
@@ -1092,7 +1300,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       className="w-full p-2.5 rounded-lg border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#D4AF37]"
                     />
                     <span className="text-[10px] text-gray-500 mt-0.5 block">
-                      Vacío para calcular automático (~38% dto).
+                      {wholesalePrice12 && Number(wholesalePrice12) > 0
+                        ? `Se verá: ${formatPrice(Number(wholesalePrice12))} c/u`
+                        : 'Vacío para calcular automático (~38% dto).'}
                     </span>
                   </div>
                 </div>
@@ -1109,11 +1319,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       className="w-full p-2.5 rounded-lg border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#D4AF37]"
                     >
                       <option value="Manillas">Manillas</option>
-                      <option value="Collares">Collares</option>
-                      <option value="Aretes">Aretes</option>
+                      <option value="Pulseras">Pulseras</option>
                       <option value="Anillos">Anillos</option>
-                      <option value="Sets">Sets</option>
-                      <option value="Tobilleras">Tobilleras</option>
+                      <option value="Aretes">Aretes</option>
+                      <option value="Collares">Collares</option>
                     </select>
                   </div>
 
